@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>小滿賺大錢</title>
+<link rel="icon" href="dumpling_logo.png" type="image/png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
@@ -78,6 +79,10 @@
   th,td{padding:6px 4px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap;}
   th{color:var(--muted);font-weight:600;}
   td.day,th.day{text-align:center;width:34px;color:var(--muted);}
+  #monthTable th, #monthTable td,
+  #statMonthTable th, #statMonthTable td {
+    text-align: center !important;
+  }
   tbody tr.today td{background:#eef4ff;}
   tbody tr:active td{background:#f3f6fb;}
   tfoot td{font-weight:700;border-top:2px solid var(--line);border-bottom:none;}
@@ -172,6 +177,9 @@
 <!-- 登入畫面 -->
 <div id="loginScreen">
   <div class="login-wrap">
+    <div style="text-align:center;margin-bottom:16px;">
+      <img src="dumpling_logo.png" alt="Dumpling Logo" style="width:90px;height:90px;border-radius:22px;box-shadow:0 8px 24px rgba(0,0,0,0.08);object-fit:cover;">
+    </div>
     <h1 style="text-align:center;margin-bottom:24px">小滿賺大錢</h1>
     <div class="card">
       <div id="mainPanel">
@@ -216,6 +224,9 @@
 <!-- 主程式 -->
 <div id="appScreen" style="display:none">
   <div class="wrap">
+    <div style="text-align:center;margin-top:16px;margin-bottom:8px;">
+      <img src="dumpling_logo.png" alt="Dumpling Logo" style="width:60px;height:60px;border-radius:15px;box-shadow:0 4px 12px rgba(0,0,0,0.06);object-fit:cover;">
+    </div>
     <h1>小滿賺大錢</h1>
     <div id="syncStatus" class="sync-line"></div>
 
