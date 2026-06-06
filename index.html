@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>小滿賺大錢</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --line: #e3e6ea; --ink: #1f2733;
+    --muted: #7a828c; --brand: #2f6df0; --brand-d: #1f53c7;
+    --good: #1f9d57; --warn: #d98324; --red: #c23a2b;
+    --pink: #fff3f0; --pink-line: #f3d8cf;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1.5;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 12px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; text-align: center; }
+
+  /* ---- 登入畫面 ---- */
+  #loginScreen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); padding: 20px;
+  }
+  .login-wrap { width: 100%; max-width: 380px; }
+  .login-wrap h1 { font-size: 26px; margin-bottom: 24px; }
+  .login-tabs { display: flex; background: var(--line); border-radius: 10px; padding: 3px; margin-bottom: 16px; }
+  .login-tabs button { flex: 1; border: none; background: transparent; border-radius: 7px; padding: 8px 0; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .login-tabs button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .login-err { font-size: 13px; min-height: 20px; margin: 8px 0; color: var(--warn); }
+  .login-ok  { font-size: 13px; min-height: 20px; margin: 8px 0; color: var(--good); }
+
+  /* ---- 主程式 ---- */
+  #appScreen { padding-bottom: 90px; }
+  .sync-line { font-size: 12px; text-align: center; margin: 0 0 10px; min-height: 16px; color: var(--muted); }
+  .tabs { display: flex; background: var(--line); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
+  .tabs button { flex: 1; border: none; background: transparent; border-radius: 9px; padding: 9px 0; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .tabs button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .card h2 { font-size: 16px; margin: 0 0 10px; }
+
+  .monthbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .monthbar .now { text-align: center; }
+  .monthbar .now .roc { font-size: 18px; font-weight: 700; }
+  .monthbar .now .iso { font-size: 12px; color: var(--muted); }
+  .navbtn { border: 1px solid var(--line); background: #fff; border-radius: 10px; width: 46px; height: 42px; font-size: 20px; color: var(--ink); cursor: pointer; }
+  .navbtn:active { background: #eef1f6; }
+
+  label.fld { display: block; font-size: 13px; color: var(--muted); margin: 0 0 4px; }
+  input[type="email"],input[type="date"],input[type="month"],input[type="number"],
+  input[type="text"],input[type="password"] {
+    width: 100%; padding: 11px 12px; font-size: 16px;
+    border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+  }
+  input:focus { outline: none; border-color: var(--brand); }
+
+  .itemrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .itemrow:last-child { border-bottom: none; }
+  .itemrow .nm { flex: 1; font-weight: 600; }
+  .itemrow .nm small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .itemrow .qty { width: 110px; }
+  .itemrow .amt { width: 84px; text-align: right; color: var(--good); font-variant-numeric: tabular-nums; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; border: none; border-radius: 12px; padding: 12px 16px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--brand); color: #fff; width: 100%; }
+  .btn.primary:active { background: var(--brand-d); }
+  .btn.ghost { background: #fff; border: 1px solid var(--line); color: var(--ink); }
+  .btn.ghost:active { background: #eef1f6; }
+  .btn.danger { background: #fff; border: 1px solid #f0c9c4; color: var(--red); }
+  .btn.sm { padding: 7px 12px; font-size: 14px; border-radius: 9px; }
+  .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .savedflag { font-size: 13px; color: var(--good); text-align: center; min-height: 18px; margin-top: 8px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  td.day, th.day { text-align: center; width: 34px; color: var(--muted); }
+  tbody tr.today td { background: #eef4ff; }
+  tbody tr:active td { background: #f3f6fb; }
+  tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: none; }
+  .tablescroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .totalbox { margin-top: 12px; background: var(--pink); border: 1px solid var(--pink-line); border-radius: 12px; padding: 12px 14px; }
+  .totalbox .line { display: flex; justify-content: space-between; padding: 3px 0; font-size: 14px; }
+  .totalbox .grand { font-size: 22px; font-weight: 800; color: var(--red); }
+
+  .empty { text-align: center; color: var(--muted); padding: 18px 0; font-size: 14px; }
+
+  .setrow { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .setrow input[data-k="name"] { flex: 2; }
+  .setrow input[data-k="unit"] { flex: 1; }
+  .setrow input[data-k="price"] { flex: 1.1; }
+  .setrow .del { color: var(--red); background: #fff; border: 1px solid #f0c9c4; border-radius: 8px; width: 36px; height: 40px; cursor: pointer; }
+
+  .footbar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px 12px; }
+  .footbar .inner { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; }
+  .footbar .btn { flex: 1; }
+
+  dialog { border: none; border-radius: 16px; padding: 0; width: min(92vw, 560px); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg-in { padding: 16px; }
+  .dlg-in h2 { margin-top: 0; }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0; }
+  .mt10 { margin-top: 10px; }
+  .mt16 { margin-top: 16px; }
+  .dlg-sep { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
+
+  /* 欠薪 */
+  .debt-hero { text-align: center; padding: 22px 14px; }
+  .debt-hero .dh-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .debt-hero .dh-amount { font-size: 46px; font-weight: 900; color: var(--red); line-height: 1.1; }
+  .debt-hero .dh-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .ldg-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ldg { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ldg th { color: var(--muted); font-weight: 600; padding: 5px 4px; border-bottom: 2px solid var(--line); text-align: right; white-space: nowrap; }
+  .ldg th:first-child, .ldg th:nth-child(2) { text-align: left; }
+  .ldg td { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .ldg td:first-child, .ldg td:nth-child(2) { text-align: left; }
+  .ldg .lr-opening td { background: #fffde7; font-weight: 600; }
+  .ldg .wage { color: var(--good); }
+  .ldg .pay  { color: var(--red); }
+  .ldg .bal  { font-weight: 700; }
+  .ldg .dim  { color: var(--line); }
+  .ldg tfoot td { font-weight: 800; border-top: 2px solid var(--line); border-bottom: none; font-size: 14px; }
+  .ldg-delbtn { background: none; border: none; color: #d0aba5; cursor: pointer; padding: 2px 5px; font-size: 14px; }
+  .ldg-delbtn:active { color: var(--red); }
+
+  /* 統計 */
+  .stat-summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 10px; text-align: center; }
+  .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .stat-card .value { font-size: 20px; font-weight: 800; color: var(--ink); line-height: 1.2; }
+  .stat-card .value.big { font-size: 17px; }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .chart-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  svg.barchart { display: block; }
+  .bar-label { font-size: 11px; fill: var(--muted); }
+  .bar-value { font-size: 10px; fill: var(--muted); }
+  .bar-zero  { fill: #eef1f6; }
+  .item-bar-row { margin-bottom: 10px; }
+  .item-bar-row .ib-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+  .item-bar-row .ib-name { font-weight: 600; }
+  .item-bar-row .ib-amt  { color: var(--muted); }
+  .item-bar-track { background: #eef1f6; border-radius: 6px; height: 10px; overflow: hidden; }
+  .item-bar-fill  { height: 100%; border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<!-- ===== 登入畫面 ===== -->
+<div id="loginScreen">
+  <div class="login-wrap">
+    <h1 style="text-align:center;margin-bottom:24px">小滿賺大錢</h1>
+    <div class="card">
+
+      <!-- 登入 / 註冊 -->
+      <div id="mainPanel">
+        <div class="login-tabs">
+          <button id="tabLoginBtn" class="active">登入</button>
+          <button id="tabSignupBtn">註冊</button>
+        </div>
+        <label class="fld">Email</label>
+        <input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email">
+        <label class="fld mt10">密碼</label>
+        <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password">
+        <div id="authMsg"></div>
+        <button class="btn primary mt16" id="authSubmitBtn">登入</button>
+        <div style="text-align:center;margin-top:12px">
+          <button id="forgotLinkBtn" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline">忘記密碼？</button>
+        </div>
+      </div>
+
+      <!-- 忘記密碼 -->
+      <div id="forgotPanel" style="display:none">
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">忘記密碼</div>
+        <p class="hint" style="margin-top:0">輸入你的 Email，系統會寄送重設連結到信箱。</p>
+        <label class="fld">Email</label>
+        <input type="email" id="forgotEmail" placeholder="your@email.com">
+        <div id="forgotMsg" style="font-size:13px;min-height:20px;margin-top:8px"></div>
+        <div class="row-btns mt16">
+          <button class="btn ghost" id="forgotBackBtn" style="flex:1">返回</button>
+          <button class="btn primary" id="forgotSubmitBtn" style="flex:1">發送連結</button>
+        </div>
+      </div>
+
+      <!-- 重設密碼（從信件連結進來） -->
+      <div id="resetPanel" style="display:none">
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">設定新密碼</div>
+        <label class="fld">新密碼</label>
+        <input type="password" id="resetPass" placeholder="至少 6 個字元">
+        <label class="fld mt10">確認新密碼</label>
+        <input type="password" id="resetPassConfirm" placeholder="再輸入一次">
+        <div id="resetMsg" style="font-size:13px;min-height:20px;margin-top:8px"></div>
+        <button class="btn primary mt16" id="resetSubmitBtn">確認更新密碼</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== 主程式 ===== -->
+<div id="appScreen" style="display:none">
+  <div class="wrap">
+    <h1>小滿賺大錢</h1>
+    <div id="syncStatus" class="sync-line"></div>
+
+    <div class="tabs">
+      <button id="tabDebtBtn" class="active">欠薪</button>
+      <button id="tabRecordBtn">記錄</button>
+      <button id="tabStatsBtn">統計</button>
+    </div>
+
+    <!-- 欠薪 -->
+    <div id="tabDebt">
+      <div class="card debt-hero">
+        <div class="dh-label">老闆目前欠薪</div>
+        <div class="dh-amount" id="debtAmount">$0</div>
+        <div class="dh-sub" id="debtSub">尚未設定期初金額</div>
+      </div>
+      <div class="row-btns" style="margin-bottom:14px">
+        <button class="btn ghost sm" id="setOpeningBtn" style="flex:1">設定期初欠薪</button>
+        <button class="btn ghost sm" id="addPaymentBtn" style="flex:1">記錄收到付款</button>
+      </div>
+      <div class="card">
+        <h2>帳務明細</h2>
+        <div class="ldg-scroll"><div id="ledgerContent"><div class="empty">尚無任何紀錄</div></div></div>
+      </div>
+    </div>
+
+    <!-- 記錄 -->
+    <div id="tabRecord" style="display:none">
+      <div class="card">
+        <div class="monthbar">
+          <button class="navbtn" id="prevMonth">‹</button>
+          <div class="now"><div class="roc" id="rocLabel">—</div><div class="iso" id="isoLabel">—</div></div>
+          <button class="navbtn" id="nextMonth">›</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>登記紀錄</h2>
+        <label class="fld" for="dateInput">日期</label>
+        <input type="date" id="dateInput">
+        <div id="entryItems" style="margin-top:10px;"></div>
+        <div style="margin-top:12px;"><button class="btn primary" id="saveBtn">儲存這天</button></div>
+        <div class="savedflag" id="savedFlag"></div>
+      </div>
+      <div class="card">
+        <h2 id="monthTitle">本月明細</h2>
+        <div class="tablescroll"><table id="monthTable"></table></div>
+        <div id="monthTotals" class="totalbox"></div>
+      </div>
+    </div>
+
+    <!-- 統計 -->
+    <div id="tabStats" style="display:none">
+      <div class="card">
+        <div class="monthbar">
+          <button class="navbtn" id="prevYear">‹</button>
+          <div class="now"><div class="roc" id="statYearRoc">—</div><div class="iso" id="statYearIso">—</div></div>
+          <button class="navbtn" id="nextYear">›</button>
+        </div>
+      </div>
+      <div class="stat-summary">
+        <div class="stat-card"><div class="label">年度總收入</div><div class="value big" id="statTotal">$0</div></div>
+        <div class="stat-card"><div class="label">工作天數</div><div class="value" id="statDays">0</div><div class="sub">天</div></div>
+        <div class="stat-card"><div class="label">平均每天</div><div class="value big" id="statAvg">$0</div></div>
+      </div>
+      <div class="card"><h2>各月收入</h2><div class="chart-wrap" id="barChartWrap"></div></div>
+      <div class="card"><h2>品項佔比</h2><div id="itemBreakdown"></div></div>
+    </div>
+  </div>
+
+  <!-- 底部 -->
+  <div class="footbar">
+    <div class="inner">
+      <button class="btn ghost sm" id="openSettings">品項設定</button>
+      <button class="btn ghost sm" id="exportBtn">匯出備份</button>
+      <button class="btn ghost sm" id="importBtn">匯入備份</button>
+      <button class="btn ghost sm" id="logoutBtn" style="color:var(--red);border-color:#f0c9c4">登出</button>
+    </div>
+  </div>
+</div><!-- /appScreen -->
+
+<!-- 品項設定 dialog -->
+<dialog id="settingsDlg">
+  <div class="dlg-in">
+    <h2>品項設定</h2>
+    <p class="hint">名稱、單位、單價。時薪就把單位寫「小時」，數量填工時即可。</p>
+    <div id="settingsList"></div>
+    <button class="btn ghost sm mt10" id="addItemBtn">＋ 新增品項</button>
+    <div class="row-btns mt16">
+      <button class="btn ghost" id="cancelSettings" style="flex:1">取消</button>
+      <button class="btn primary" id="saveSettings" style="flex:1">儲存設定</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 期初欠薪 dialog -->
+<dialog id="openingDlg">
+  <div class="dlg-in">
+    <h2>設定期初欠薪</h2>
+    <p class="hint">截至某日老闆共欠你的總額。之後每月工資自動加入，付款另外記錄。</p>
+    <label class="fld">截至日期</label>
+    <input type="date" id="openingDate">
+    <label class="fld mt10">欠薪金額（元）</label>
+    <input type="number" id="openingAmount" inputmode="decimal" placeholder="0">
+    <div class="row-btns mt16">
+      <button class="btn ghost" id="cancelOpening" style="flex:1">取消</button>
+      <button class="btn primary" id="saveOpening" style="flex:1">儲存</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 付款 dialog -->
+<dialog id="paymentDlg">
+  <div class="dlg-in">
+    <h2>記錄收到的付款</h2>
+    <p class="hint">老闆這次給了多少？選月份並填金額。</p>
+    <label class="fld">月份</label>
+    <input type="month" id="paymentMonth">
+    <label class="fld mt10">金額（元）</label>
+    <input type="number" id="paymentAmount" inputmode="decimal" placeholder="0">
+    <label class="fld mt10">備註（選填）</label>
+    <input type="text" id="paymentNote" placeholder="例：1月工資款">
+    <div class="row-btns mt16">
+      <button class="btn ghost" id="cancelPayment" style="flex:1">取消</button>
+      <button class="btn primary" id="savePayment" style="flex:1">儲存</button>
+    </div>
+  </div>
+</dialog>
+
+<input type="file" id="importFile" accept="application/json" style="display:none">
+
+<script>
+"use strict";
+
+// ================================================================
+// Supabase 設定（填入你的專案資訊）
+// ================================================================
+const SUPABASE_URL = "https://lkojnzprqqdmqhzzlqtb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_nxikV7UaOTeemwN5T4TXRQ_rFx73PMc";
+
+let supaClient = null;
+try {
+  supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} catch(e) {
+  console.warn("Supabase 初始化失敗：", e.message);
+}
+
+// ================================================================
+// 資料
+// ================================================================
+const STORE_KEY = "piecework_data_v1";
+
+const DEFAULT_ITEMS = [
+  { id:"i_dumpling", name:"水餃",  unit:"斤",   price:30 },
+  { id:"i_wonton",   name:"餛飩",  unit:"份",   price:35 },
+  { id:"i_shrimp",   name:"蝦",    unit:"斤",   price:40 },
+  { id:"i_scallop",  name:"干貝",  unit:"斤",   price:40 },
+  { id:"i_hourly",   name:"時薪",  unit:"小時", price:180 },
+];
+const ITEM_COLORS = ["#2f6df0","#f0772f","#1f9d57","#9b59b6","#e74c3c","#16a085","#d98324","#95a5a6"];
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (!Array.isArray(d.items))    d.items    = DEFAULT_ITEMS.slice();
+      if (!d.records)                 d.records  = {};
+      if (!d.opening)                 d.opening  = { date:"", amount:0 };
+      if (!Array.isArray(d.payments)) d.payments = [];
+      return d;
+    }
+  } catch(e) {}
+  return { items:DEFAULT_ITEMS.slice(), records:{}, opening:{date:"",amount:0}, payments:[], updatedAt:0 };
+}
+function saveLocal() {
+  if (!data.updatedAt) data.updatedAt = Date.now();
+  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+}
+
+let data     = loadData();
+let viewDate = (() => { const d = new Date(); d.setDate(1); return d; })();
+let statYear = new Date().getFullYear();
+
+// ================================================================
+// 工具
+// ================================================================
+function pad(n)     { return String(n).padStart(2,"0"); }
+function ymd(d)     { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function rocYear(y) { return y - 1911; }
+function money(n)   { return "$" + Math.round(n).toLocaleString("en-US"); }
+function num(v)     { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+function todayStr() { return ymd(new Date()); }
+function daysInMonth(y,m0) { return new Date(y,m0+1,0).getDate(); }
+function ymToRoc(ym)  { const [y,m] = ym.split("-"); return `${parseInt(y)-1911}/${m}`; }
+function dateToRoc(iso) {
+  if (!iso) return "—";
+  const p = iso.split("-");
+  return `${parseInt(p[0])-1911}/${p[1]}/${p[2]}`;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// ================================================================
+// 登入 / 登出
+// ================================================================
+let authMode = "login"; // "login" | "signup"
+
+// 切換登入畫面內的面板
+function showAuthPanel(panel) {
+  ["mainPanel","forgotPanel","resetPanel"].forEach(id => {
+    document.getElementById(id).style.display = (id === panel) ? "" : "none";
+  });
+}
+
+document.getElementById("tabLoginBtn").addEventListener("click", () => setAuthMode("login"));
+document.getElementById("tabSignupBtn").addEventListener("click", () => setAuthMode("signup"));
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById("tabLoginBtn").classList.toggle("active", mode==="login");
+  document.getElementById("tabSignupBtn").classList.toggle("active", mode==="signup");
+  document.getElementById("authSubmitBtn").textContent = (mode==="login") ? "登入" : "註冊";
+  document.getElementById("authMsg").textContent = "";
+  document.getElementById("authMsg").className = "";
+}
+
+function setAuthMsg(msg, isOk) {
+  const el = document.getElementById("authMsg");
+  el.textContent = msg;
+  el.className = isOk ? "login-ok" : "login-err";
+}
+
+document.getElementById("authSubmitBtn").addEventListener("click", async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  const pass  = document.getElementById("authPass").value;
+  if (!email || !pass) { setAuthMsg("請填入 Email 和密碼"); return; }
+  if (authMode === "signup" && pass.length < 6) { setAuthMsg("密碼至少 6 個字元"); return; }
+
+  if (!supaClient) { setAuthMsg("雲端連線尚未設定，請聯絡管理員"); return; }
+  document.getElementById("authSubmitBtn").disabled = true;
+  setAuthMsg(authMode==="login" ? "登入中..." : "註冊中...");
+
+  if (authMode === "login") {
+    const { error } = await supaClient.auth.signInWithPassword({ email, password:pass });
+    if (error) { setAuthMsg("登入失敗：" + error.message); }
+  } else {
+    const { error } = await supaClient.auth.signUp({ email, password:pass });
+    if (error) { setAuthMsg("註冊失敗：" + error.message); }
+    else       { setAuthMsg("✓ 帳號已建立，正在登入...", true); }
+  }
+  document.getElementById("authSubmitBtn").disabled = false;
+});
+
+// Enter 鍵送出
+["authEmail","authPass"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key==="Enter") document.getElementById("authSubmitBtn").click();
+  });
+});
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  if (!confirm("確定登出？")) return;
+  await supaClient.auth.signOut();
+  document.getElementById("settingsDlg").close();
+});
+
+// 忘記密碼
+document.getElementById("forgotLinkBtn").addEventListener("click", () => {
+  document.getElementById("forgotEmail").value = document.getElementById("authEmail").value || "";
+  document.getElementById("forgotMsg").textContent = "";
+  showAuthPanel("forgotPanel");
+});
+document.getElementById("forgotBackBtn").addEventListener("click", () => showAuthPanel("mainPanel"));
+document.getElementById("forgotSubmitBtn").addEventListener("click", async () => {
+  const email = document.getElementById("forgotEmail").value.trim();
+  const msgEl = document.getElementById("forgotMsg");
+  if (!email) { msgEl.style.color="var(--warn)"; msgEl.textContent="請填入 Email"; return; }
+  if (!supaClient) { msgEl.style.color="var(--warn)"; msgEl.textContent="連線未設定"; return; }
+  msgEl.style.color="var(--muted)"; msgEl.textContent="發送中...";
+  const redirectTo = window.location.href.split("#")[0];
+  const { error } = await supaClient.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) { msgEl.style.color="var(--warn)"; msgEl.textContent="發送失敗："+error.message; }
+  else        { msgEl.style.color="var(--good)";  msgEl.textContent="✓ 連結已寄出，請查收信箱"; }
+});
+
+// 重設密碼
+document.getElementById("resetSubmitBtn").addEventListener("click", async () => {
+  const pass    = document.getElementById("resetPass").value;
+  const confirm = document.getElementById("resetPassConfirm").value;
+  const msgEl   = document.getElementById("resetMsg");
+  if (pass.length < 6) { msgEl.style.color="var(--warn)"; msgEl.textContent="密碼至少 6 個字元"; return; }
+  if (pass !== confirm) { msgEl.style.color="var(--warn)"; msgEl.textContent="兩次密碼不一致"; return; }
+  msgEl.style.color="var(--muted)"; msgEl.textContent="更新中...";
+  const { error } = await supaClient.auth.updateUser({ password: pass });
+  if (error) { msgEl.style.color="var(--warn)"; msgEl.textContent="更新失敗："+error.message; }
+  else       { msgEl.style.color="var(--good)";  msgEl.textContent="✓ 密碼已更新，正在登入..."; }
+});
+
+// Auth 狀態監聽
+if (!supaClient) { showLogin(); }
+supaClient && supaClient.auth.onAuthStateChange((event, session) => {
+  if (event === "PASSWORD_RECOVERY") {
+    // 從信件連結進來，顯示重設密碼面板
+    showLogin();
+    showAuthPanel("resetPanel");
+  } else if (session) {
+    showApp();
+    if (event === "SIGNED_IN") syncFromCloud();
+  } else {
+    showLogin();
+  }
+});
+
+function showLogin() {
+  document.getElementById("loginScreen").style.display = "";
+  document.getElementById("appScreen").style.display   = "none";
+}
+function showApp() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appScreen").style.display   = "";
+  document.getElementById("dateInput").value = todayStr();
+  renderMonthHeader(); renderEntryForm(); renderMonthTable(); renderDebt();
+}
+
+// 檢查既有 session
+if (supaClient) {
+  supaClient.auth.getSession().then(({ data: { session } }) => {
+    if (!session) showLogin();
+  });
+}
+
+// ================================================================
+// 雲端同步
+// ================================================================
+function updateSyncStatus(state) {
+  const el = document.getElementById("syncStatus");
+  const MAP = {
+    ok:      ["☁ 已同步",    "#1f9d57"],
+    syncing: ["⟳ 同步中...", "#7a828c"],
+    error:   ["⚠ 同步失敗",  "#d98324"],
+  };
+  const [text, color] = MAP[state] || ["", "#c0c5cc"];
+  el.textContent = text; el.style.color = color;
+}
+
+async function getCurrentUser() {
+  const { data: { user } } = await supaClient.auth.getUser();
+  return user;
+}
+
+async function syncToCloud() {
+  const user = await getCurrentUser(); if (!user) return;
+  data.updatedAt = Date.now(); saveLocal();
+  updateSyncStatus("syncing");
+  try {
+    const { error } = await supaClient.from("piecework_data")
+      .upsert({ key:"main", user_id:user.id, payload:data, updated_at:new Date().toISOString() },
+              { onConflict:"key,user_id" });
+    if (error) throw error;
+    updateSyncStatus("ok");
+  } catch(e) { updateSyncStatus("error"); console.error("syncToCloud:", e); }
+}
+
+async function syncFromCloud() {
+  const user = await getCurrentUser(); if (!user) return;
+  updateSyncStatus("syncing");
+  try {
+    const { data:row, error } = await supaClient.from("piecework_data")
+      .select("payload, updated_at").eq("key","main").maybeSingle();
+    if (error) throw error;
+
+    if (!row) { await syncToCloud(); return; }
+
+    const cloudTime = new Date(row.updated_at).getTime();
+    const localTime = data.updatedAt || 0;
+    if (cloudTime > localTime) {
+      const d = row.payload;
+      if (!d.opening)  d.opening  = { date:"", amount:0 };
+      if (!Array.isArray(d.payments)) d.payments = [];
+      if (!Array.isArray(d.items))    d.items    = DEFAULT_ITEMS.slice();
+      if (!d.records)  d.records  = {};
+      data = d; saveLocal(); renderAll();
+    } else if (localTime > cloudTime) {
+      await syncToCloud();
+    } else {
+      updateSyncStatus("ok");
+    }
+  } catch(e) { updateSyncStatus("error"); console.error("syncFromCloud:", e); }
+}
+
+function renderAll() {
+  renderMonthHeader(); renderEntryForm(); renderMonthTable(); renderDebt();
+}
+
+// ================================================================
+// 分頁切換
+// ================================================================
+function switchTab(active) {
+  ["Debt","Record","Stats"].forEach(t => {
+    document.getElementById("tab"+t).style.display = (t===active) ? "" : "none";
+    document.getElementById("tab"+t+"Btn").classList.toggle("active", t===active);
+  });
+  if (active==="Debt")  renderDebt();
+  if (active==="Stats") renderStats();
+}
+document.getElementById("tabDebtBtn").addEventListener("click",   () => switchTab("Debt"));
+document.getElementById("tabRecordBtn").addEventListener("click", () => switchTab("Record"));
+document.getElementById("tabStatsBtn").addEventListener("click",  () => switchTab("Stats"));
+
+// ================================================================
+// 欠薪分頁
+// ================================================================
+function buildLedgerRows() {
+  const op = data.opening;
+  const openingYM = (op && op.date) ? op.date.slice(0,7) : "";
+  const wagesByYM = {};
+  Object.keys(data.records).forEach(key => {
+    const ym = key.slice(0,7);
+    if (openingYM && ym <= openingYM) return;
+    if (!wagesByYM[ym]) wagesByYM[ym] = 0;
+    const rec = data.records[key];
+    data.items.forEach(it => { wagesByYM[ym] += (rec[it.id]||0) * it.price; });
+  });
+  const paysByYM = {};
+  (data.payments||[]).forEach(p => {
+    if (!paysByYM[p.yearMonth]) paysByYM[p.yearMonth] = [];
+    paysByYM[p.yearMonth].push(p);
+  });
+  const allYMs = [...new Set([...Object.keys(wagesByYM), ...Object.keys(paysByYM)])].sort();
+  let balance = (op && op.amount) ? op.amount : 0;
+  const rows = [];
+  if (op && (op.date || op.amount)) {
+    rows.push({ type:"opening", date:op.date?dateToRoc(op.date):"—", desc:"期初欠薪", wages:null, payment:null, balance });
+  }
+  allYMs.forEach(ym => {
+    const roc = ymToRoc(ym);
+    (paysByYM[ym]||[]).forEach(p => {
+      balance -= p.amount;
+      rows.push({ type:"payment", date:roc, desc:p.note||`${roc} 付款`, wages:null, payment:p.amount, balance, paymentId:p.id });
+    });
+    const wages = wagesByYM[ym]||0;
+    if (wages > 0) {
+      balance += wages;
+      rows.push({ type:"wages", date:roc, desc:`${roc} 工資`, wages, payment:null, balance });
+    }
+  });
+  return { rows, balance };
+}
+
+function renderDebt() {
+  const { rows, balance } = buildLedgerRows();
+  document.getElementById("debtAmount").textContent = money(balance);
+  const op = data.opening;
+  document.getElementById("debtSub").textContent =
+    (op && op.date) ? `含截至 ${dateToRoc(op.date)} 的欠薪` :
+    rows.length ? "" : "尚未設定期初金額";
+  const box = document.getElementById("ledgerContent");
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">尚無任何紀錄<br><small>請先「設定期初欠薪」，或到記錄頁登記工資</small></div>`;
+    return;
+  }
+  let html = `<table class="ldg">
+    <thead><tr><th>日期</th><th>說明</th><th>工資</th><th>付款</th><th>結餘</th><th></th></tr></thead><tbody>`;
+  rows.forEach(row => {
+    const wCell = row.wages   != null ? `<td class="wage">+${money(row.wages)}</td>`  : `<td class="dim">—</td>`;
+    const pCell = row.payment != null ? `<td class="pay">-${money(row.payment)}</td>` : `<td class="dim">—</td>`;
+    const del   = row.type==="payment" ? `<button class="ldg-delbtn" data-pid="${row.paymentId}">✕</button>` : ``;
+    html += `<tr class="lr-${row.type}">
+      <td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.desc)}</td>
+      ${wCell}${pCell}<td class="bal">${money(row.balance)}</td><td>${del}</td></tr>`;
+  });
+  html += `</tbody><tfoot><tr>
+    <td colspan="4" style="text-align:left">目前結餘</td>
+    <td class="pay" style="font-size:15px">${money(rows[rows.length-1].balance)}</td><td></td>
+  </tr></tfoot></table>`;
+  box.innerHTML = html;
+  box.querySelectorAll(".ldg-delbtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!confirm("確定刪除這筆付款紀錄？")) return;
+      data.payments = data.payments.filter(p => p.id !== btn.dataset.pid);
+      saveLocal(); syncToCloud(); renderDebt();
+    });
+  });
+}
+
+document.getElementById("setOpeningBtn").addEventListener("click", () => {
+  const op = data.opening;
+  document.getElementById("openingDate").value   = op.date   || "";
+  document.getElementById("openingAmount").value = op.amount || "";
+  document.getElementById("openingDlg").showModal();
+});
+document.getElementById("cancelOpening").addEventListener("click", () => document.getElementById("openingDlg").close());
+document.getElementById("saveOpening").addEventListener("click", () => {
+  const date=document.getElementById("openingDate").value;
+  const amount=num(document.getElementById("openingAmount").value);
+  if (!date)   { alert("請選截至日期"); return; }
+  if (!amount) { alert("請填欠薪金額"); return; }
+  data.opening = { date, amount }; saveLocal(); syncToCloud();
+  document.getElementById("openingDlg").close(); renderDebt();
+});
+
+document.getElementById("addPaymentBtn").addEventListener("click", () => {
+  const t=new Date();
+  document.getElementById("paymentMonth").value  = `${t.getFullYear()}-${pad(t.getMonth()+1)}`;
+  document.getElementById("paymentAmount").value = "";
+  document.getElementById("paymentNote").value   = "";
+  document.getElementById("paymentDlg").showModal();
+});
+document.getElementById("cancelPayment").addEventListener("click", () => document.getElementById("paymentDlg").close());
+document.getElementById("savePayment").addEventListener("click", () => {
+  const ym=document.getElementById("paymentMonth").value;
+  const amount=num(document.getElementById("paymentAmount").value);
+  const note=document.getElementById("paymentNote").value.trim();
+  if (!ym)     { alert("請選月份"); return; }
+  if (!amount) { alert("請填金額"); return; }
+  data.payments.push({ id:"p_"+Date.now(), yearMonth:ym, amount, note });
+  data.payments.sort((a,b) => a.yearMonth.localeCompare(b.yearMonth));
+  saveLocal(); syncToCloud();
+  document.getElementById("paymentDlg").close(); renderDebt();
+});
+
+// ================================================================
+// 記錄分頁
+// ================================================================
+function renderMonthHeader() {
+  const y=viewDate.getFullYear(), m=viewDate.getMonth()+1;
+  document.getElementById("rocLabel").textContent = `${rocYear(y)}年 ${m}月`;
+  document.getElementById("isoLabel").textContent = `西元 ${y} 年`;
+  document.getElementById("monthTitle").textContent = `${rocYear(y)}年 ${m}月 明細`;
+}
+function renderEntryForm() {
+  const box=document.getElementById("entryItems");
+  const date=document.getElementById("dateInput").value;
+  const rec=(date && data.records[date]) || {};
+  box.innerHTML="";
+  data.items.forEach(it => {
+    const qty=rec[it.id]!=null ? rec[it.id] : "";
+    const row=document.createElement("div"); row.className="itemrow";
+    row.innerHTML=`
+      <div class="nm">${escapeHtml(it.name)}<small>${money(it.price)} / ${escapeHtml(it.unit)}</small></div>
+      <input class="qty" type="number" inputmode="decimal" step="any" min="0"
+             data-item="${it.id}" placeholder="0" value="${qty}">
+      <div class="amt" data-amt="${it.id}">${money(num(qty)*it.price)}</div>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll("input.qty").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const it=data.items.find(x => x.id===inp.dataset.item);
+      box.querySelector(`[data-amt="${inp.dataset.item}"]`).textContent = money(num(inp.value)*it.price);
+    });
+  });
+}
+function saveEntry() {
+  const date=document.getElementById("dateInput").value;
+  if (!date) { flash("請先選日期",true); return; }
+  const rec={};
+  document.querySelectorAll("#entryItems input.qty").forEach(inp => {
+    const v=num(inp.value); if (v) rec[inp.dataset.item]=v;
+  });
+  if (!Object.keys(rec).length) { delete data.records[date]; }
+  else { data.records[date]=rec; }
+  saveLocal(); syncToCloud(); flash("已儲存 "+date); renderMonthTable();
+}
+let flashTimer=null;
+function flash(msg, isWarn) {
+  const el=document.getElementById("savedFlag");
+  el.textContent=msg; el.style.color=isWarn?"var(--warn)":"var(--good)";
+  clearTimeout(flashTimer); flashTimer=setTimeout(()=>{ el.textContent=""; },2500);
+}
+function renderMonthTable() {
+  const y=viewDate.getFullYear(), m0=viewDate.getMonth(), dim=daysInMonth(y,m0), items=data.items;
+  const table=document.getElementById("monthTable");
+  let html="<thead><tr><th class='day'>日</th>";
+  items.forEach(it => html+=`<th>${escapeHtml(it.name)}</th>`);
+  html+="<th>金額</th></tr></thead><tbody>";
+  const colTotal={}; items.forEach(it=>colTotal[it.id]=0);
+  let grand=0, hasAny=false;
+  for (let d=1; d<=dim; d++) {
+    const key=`${y}-${pad(m0+1)}-${pad(d)}`, rec=data.records[key]; if (!rec) continue;
+    hasAny=true; let dayMoney=0, cells="";
+    items.forEach(it => {
+      const q=rec[it.id]||0; colTotal[it.id]+=q; dayMoney+=q*it.price;
+      cells+=`<td>${q?fmtQty(q):""}</td>`;
+    });
+    grand+=dayMoney;
+    html+=`<tr${key===todayStr()?" class='today'":""} data-key="${key}"><td class='day'>${d}</td>${cells}<td>${money(dayMoney)}</td></tr>`;
+  }
+  html+="</tbody>";
+  if (hasAny) {
+    html+="<tfoot><tr><td class='day'>合計</td>";
+    items.forEach(it=>html+=`<td>${colTotal[it.id]?fmtQty(colTotal[it.id]):""}</td>`);
+    html+=`<td>${money(grand)}</td></tr></tfoot>`;
+  }
+  table.innerHTML=html;
+  if (!hasAny) table.innerHTML="<tbody><tr><td><div class='empty'>這個月還沒有紀錄</div></td></tr></tbody>";
+  table.querySelectorAll("tbody tr[data-key]").forEach(tr => {
+    tr.addEventListener("click", () => {
+      document.getElementById("dateInput").value=tr.dataset.key;
+      renderEntryForm(); window.scrollTo({top:0,behavior:"smooth"});
+    });
+  });
+  renderMonthTotals(colTotal,grand);
+}
+function fmtQty(n) { return Number.isInteger(n)?String(n):n.toFixed(1); }
+function renderMonthTotals(colTotal,grand) {
+  const box=document.getElementById("monthTotals"); let html="";
+  data.items.forEach(it => {
+    const q=colTotal[it.id]||0; if (!q) return;
+    html+=`<div class="line"><span>${escapeHtml(it.name)}　${fmtQty(q)} ${escapeHtml(it.unit)} × ${money(it.price)}</span><span>${money(q*it.price)}</span></div>`;
+  });
+  html+=`<div class="line grand"><span>本月合計</span><span>${money(grand)}</span></div>`;
+  box.innerHTML=html;
+}
+function changeMonth(d) { viewDate.setMonth(viewDate.getMonth()+d); renderMonthHeader(); renderMonthTable(); }
+document.getElementById("prevMonth").addEventListener("click", ()=>changeMonth(-1));
+document.getElementById("nextMonth").addEventListener("click", ()=>changeMonth(1));
+document.getElementById("dateInput").addEventListener("change", renderEntryForm);
+document.getElementById("saveBtn").addEventListener("click", saveEntry);
+
+// ================================================================
+// 品項設定
+// ================================================================
+function openSettings() {
+  const list=document.getElementById("settingsList"); list.innerHTML="";
+  data.items.forEach(it=>list.appendChild(makeSetRow(it)));
+  document.getElementById("settingsDlg").showModal();
+}
+function makeSetRow(it) {
+  const div=document.createElement("div"); div.className="setrow"; div.dataset.id=it.id||"";
+  div.innerHTML=`
+    <input type="text" data-k="name" placeholder="名稱" value="${escapeAttr(it.name||"")}">
+    <input type="text" data-k="unit" placeholder="單位" value="${escapeAttr(it.unit||"")}">
+    <input type="number" data-k="price" inputmode="decimal" step="any" placeholder="單價" value="${it.price!=null?it.price:""}">
+    <button class="del" title="刪除">✕</button>`;
+  div.querySelector(".del").addEventListener("click", ()=>div.remove());
+  return div;
+}
+function saveSettings() {
+  const rows=document.querySelectorAll("#settingsList .setrow"), newItems=[]; let n=0;
+  rows.forEach(row => {
+    const name=row.querySelector('[data-k="name"]').value.trim();
+    const unit=row.querySelector('[data-k="unit"]').value.trim();
+    const price=num(row.querySelector('[data-k="price"]').value);
+    if (!name) return;
+    const id=row.dataset.id||("i_"+Date.now()+"_"+(n++));
+    newItems.push({id,name,unit,price});
+  });
+  if (!newItems.length) { alert("至少要留一個品項"); return; }
+  data.items=newItems; saveLocal(); syncToCloud();
+  document.getElementById("settingsDlg").close();
+  renderEntryForm(); renderMonthTable();
+}
+document.getElementById("openSettings").addEventListener("click", openSettings);
+document.getElementById("cancelSettings").addEventListener("click", ()=>document.getElementById("settingsDlg").close());
+document.getElementById("saveSettings").addEventListener("click", saveSettings);
+document.getElementById("addItemBtn").addEventListener("click", ()=>{
+  document.getElementById("settingsList").appendChild(makeSetRow({name:"",unit:"",price:""}));
+});
+
+// ================================================================
+// 匯出 / 匯入
+// ================================================================
+document.getElementById("exportBtn").addEventListener("click", ()=>{
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=`計件備份_${todayStr()}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("importBtn").addEventListener("click", ()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", e=>{
+  const file=e.target.files[0]; if (!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try {
+      const d=JSON.parse(reader.result);
+      if (!Array.isArray(d.items)||typeof d.records!=="object") throw new Error("格式不符");
+      if (!confirm("還原會覆蓋目前所有資料，確定嗎？")) return;
+      data=d;
+      if (!data.opening)  data.opening  = {date:"",amount:0};
+      if (!data.payments) data.payments = [];
+      saveLocal(); syncToCloud(); renderAll(); flash("已還原備份");
+    } catch(err) { alert("檔案讀取失敗："+err.message); }
+  };
+  reader.readAsText(file); e.target.value="";
+});
+
+// ================================================================
+// 統計分頁
+// ================================================================
+function calcYearStats(year) {
+  const monthTotals=Array(12).fill(0), itemTotals={};
+  data.items.forEach(it=>itemTotals[it.id]=0);
+  let grand=0, days=0;
+  Object.keys(data.records).forEach(key=>{
+    if (!key.startsWith(String(year)+"-")) return;
+    const m0=parseInt(key.slice(5,7),10)-1, rec=data.records[key]; let dayMoney=0;
+    data.items.forEach(it=>{ const q=rec[it.id]||0; itemTotals[it.id]+=q*it.price; dayMoney+=q*it.price; });
+    if (dayMoney>0){ days++; grand+=dayMoney; monthTotals[m0]+=dayMoney; }
+  });
+  return {monthTotals,itemTotals,grand,days};
+}
+function renderStats() {
+  const y=statYear;
+  document.getElementById("statYearRoc").textContent=`${rocYear(y)}年`;
+  document.getElementById("statYearIso").textContent=`西元 ${y} 年`;
+  const {monthTotals,itemTotals,grand,days}=calcYearStats(y);
+  document.getElementById("statTotal").textContent=money(grand);
+  document.getElementById("statDays").textContent=days;
+  document.getElementById("statAvg").textContent=money(days?Math.round(grand/days):0);
+  renderBarChart(monthTotals,y); renderItemBreakdown(itemTotals,grand);
+}
+function renderBarChart(monthTotals,year) {
+  const MONTHS=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+  const W=44,GAP=6,PL=8,PR=8,PT=10,PB=36,BH=140;
+  const maxVal=Math.max(...monthTotals,1), curM=(year===new Date().getFullYear())?new Date().getMonth():-1;
+  const TW=PL+12*(W+GAP)-GAP+PR, TH=PT+BH+PB;
+  let svg=`<svg class="barchart" width="${TW}" height="${TH}" xmlns="http://www.w3.org/2000/svg">`;
+  monthTotals.forEach((val,i)=>{
+    const x=PL+i*(W+GAP), bH=val?Math.max(Math.round((val/maxVal)*BH),4):0, bY=PT+BH-bH;
+    const color=(i===curM)?"#2f6df0":"#93b4f8";
+    svg+=`<rect x="${x}" y="${PT}" width="${W}" height="${BH}" rx="6" class="bar-zero"/>`;
+    if (val){
+      svg+=`<rect x="${x}" y="${bY}" width="${W}" height="${bH}" rx="6" fill="${color}"/>`;
+      const s=val>=10000?(val/10000).toFixed(1)+"萬":(val/1000).toFixed(0)+"k";
+      svg+=`<text x="${x+W/2}" y="${bY-3}" text-anchor="middle" class="bar-value">${s}</text>`;
+    }
+    svg+=`<text x="${x+W/2}" y="${PT+BH+16}" text-anchor="middle" class="bar-label">${MONTHS[i]}</text>`;
+  });
+  svg+=`</svg>`;
+  document.getElementById("barChartWrap").innerHTML=svg;
+}
+function renderItemBreakdown(itemTotals,grand) {
+  const box=document.getElementById("itemBreakdown");
+  if (!grand){ box.innerHTML=`<div class="empty">這一年還沒有紀錄</div>`; return; }
+  let html="";
+  data.items.forEach((it,i)=>{
+    const amt=itemTotals[it.id]||0; if (!amt) return;
+    const pct=Math.round(amt/grand*100), color=ITEM_COLORS[i%ITEM_COLORS.length];
+    html+=`<div class="item-bar-row">
+      <div class="ib-head"><span class="ib-name" style="color:${color}">${escapeHtml(it.name)}</span><span class="ib-amt">${money(amt)}　${pct}%</span></div>
+      <div class="item-bar-track"><div class="item-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  });
+  box.innerHTML=html;
+}
+function changeYear(d){ statYear+=d; renderStats(); }
+document.getElementById("prevYear").addEventListener("click", ()=>changeYear(-1));
+document.getElementById("nextYear").addEventListener("click", ()=>changeYear(1));
+</script>
+</body>
+</html>
