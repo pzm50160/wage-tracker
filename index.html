@@ -697,6 +697,37 @@ supaClient && supaClient.auth.onAuthStateChange((event,session)=>{
             renderAll();
           });
         }
+        
+        if (email === "cmm530227@gmail.com" && !data.clearedForCmmJune) {
+          let changed = false;
+          if (data.records) {
+            Object.keys(data.records).forEach(key => {
+              if (key >= "2026-06-01") {
+                delete data.records[key];
+                changed = true;
+              }
+            });
+          }
+          if (Array.isArray(data.payments)) {
+            const beforeCount = data.payments.length;
+            data.payments = data.payments.filter(p => p.yearMonth < "2026-06");
+            if (data.payments.length !== beforeCount) {
+              changed = true;
+            }
+          }
+          
+          data.clearedForCmmJune = true;
+          if (changed) {
+            data.updatedAt = Date.now();
+            saveLocal();
+            syncToCloud().then(() => {
+              renderAll();
+            });
+          } else {
+            saveLocal();
+            renderAll();
+          }
+        }
       });
     }
   }
@@ -1028,52 +1059,65 @@ function buildLedgerRows() {
   });
   const allYMs=[...new Set([...Object.keys(wagesByYM),...Object.keys(paysByYM)])].sort();
   let balance=(op&&op.amount)?op.amount:0;
-  const rows=[];
+  const allRows=[];
 
-  const LIMIT = 6;
-  let oldYMs = [], newYMs = [];
-  if (allYMs.length > 0) {
-    const lastYM = allYMs[allYMs.length - 1];
-    const [lastY, lastM] = lastYM.split("-").map(Number);
-    const lastVal = lastY * 12 + lastM;
-    allYMs.forEach(ym => {
-      const [y, m] = ym.split("-").map(Number);
-      const val = y * 12 + m;
-      if (lastVal - val < LIMIT) {
-        newYMs.push(ym);
-      } else {
-        oldYMs.push(ym);
-      }
-    });
-  }
-
-  // 先計算 oldYMs (前期) 的餘額累加
-  oldYMs.forEach(ym => {
-    (paysByYM[ym]||[]).forEach(p=>{
-      balance -= p.amount;
-    });
-    const wages = wagesByYM[ym]||0;
-    balance += wages;
-  });
-
-  // 寫入期初金額或前期結餘
-  if (oldYMs.length > 0) {
-    const lastOldYM = oldYMs[oldYMs.length - 1];
-    rows.push({type:"opening",date:ymToRoc(lastOldYM),desc:"前期結餘",wages:null,payment:null,balance});
-  } else if (op&&(op.date||op.amount)){
-    rows.push({type:"opening",date:op.date?dateToRoc(op.date):"—",desc:"期初金額",wages:null,payment:null,balance});
-  }
-
-  // 寫入最近 6 個月 (newYMs) 的明細
-  newYMs.forEach(ym=>{
+  allYMs.forEach(ym=>{
     const roc=ymToRoc(ym);
     (paysByYM[ym]||[]).forEach(p=>{
-      balance-=p.amount;
-      rows.push({type:"payment",date:roc,desc:p.note||`${roc}付款`,wages:null,payment:p.amount,balance,paymentId:p.id});
+      balance -= p.amount;
+      allRows.push({
+        type: "payment",
+        date: roc,
+        desc: p.note || `${roc}付款`,
+        wages: null,
+        payment: p.amount,
+        balance,
+        paymentId: p.id
+      });
     });
-    const wages=wagesByYM[ym]||0;
-    if (wages>0){balance+=wages;rows.push({type:"wages",date:roc,desc:`${roc} 工資`,wages,payment:null,balance});}
+    const wages = wagesByYM[ym]||0;
+    if (wages > 0) {
+      balance += wages;
+      allRows.push({
+        type: "wages",
+        date: roc,
+        desc: `${roc} 工資`,
+        wages,
+        payment: null,
+        balance
+      });
+    }
   });
+
+  const LIMIT = 10;
+  const rows = [];
+  if (allRows.length > LIMIT) {
+    const oldRows = allRows.slice(0, allRows.length - LIMIT);
+    const newRows = allRows.slice(allRows.length - LIMIT);
+    const lastOld = oldRows[oldRows.length - 1];
+    rows.push({
+      type: "opening",
+      date: lastOld.date,
+      desc: "前期結餘",
+      wages: null,
+      payment: null,
+      balance: lastOld.balance
+    });
+    rows.push(...newRows);
+  } else {
+    if (op && (op.date || op.amount)) {
+      rows.push({
+        type: "opening",
+        date: op.date ? dateToRoc(op.date) : "—",
+        desc: "期初金額",
+        wages: null,
+        payment: null,
+        balance: (op && op.amount) ? op.amount : 0
+      });
+    }
+    rows.push(...allRows);
+  }
+
   return {rows,balance};
 }
 function renderDebt() {
