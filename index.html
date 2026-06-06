@@ -295,11 +295,11 @@
         </div>
       </div>
       <div class="stat-summary">
-        <div class="stat-card"><div class="label">年度總收入</div><div class="value big" id="statTotal">$0</div></div>
+        <div class="stat-card"><div class="label">月度總收入</div><div class="value big" id="statTotal">$0</div></div>
         <div class="stat-card"><div class="label">工作天數</div><div class="value" id="statDays">0</div><div class="sub">天</div></div>
         <div class="stat-card"><div class="label">平均每天</div><div class="value big" id="statAvg">$0</div></div>
       </div>
-      <div class="card"><h2>各月收入</h2><div class="chart-wrap" id="barChartWrap"></div></div>
+      <div class="card"><h2>每日收入</h2><div class="chart-wrap" id="barChartWrap"></div></div>
       <div class="card"><h2>品項佔比</h2><div id="itemBreakdown"></div></div>
       <div class="card">
         <div class="card-head">
@@ -327,7 +327,7 @@
 
 <!-- 合併匯出臨時容器 -->
 <div id="combinedExportContainer" style="position: fixed; left: -9999px; top: -9999px; width: 680px; background: var(--bg); padding: 20px; box-sizing: border-box; font-family: inherit;">
-  <h1 id="combinedTitle" style="text-align: center; margin-bottom: 20px; color: var(--ink);">小滿賺大錢 月報表</h1>
+  <h1 id="combinedTitle" style="text-align: center; margin-bottom: 20px; color: var(--ink);">月報表</h1>
   <div id="combinedMonthSection"></div>
   <div id="combinedDebtSection" style="margin-top: 20px;"></div>
 </div>
@@ -401,11 +401,29 @@ const DEFAULT_ITEMS = [
   {id:"i_wonton",  name:"餛飩",unit:"份",price:35},
   {id:"i_shrimp",  name:"蝦",  unit:"斤",price:40},
   {id:"i_scallop", name:"干貝",unit:"斤",price:40},
-  {id:"i_hourly",  name:"時薪",unit:"小時",price:180},
+  {id:"i_hourly",  name:"時薪(小時)",unit:"小時",price:180},
 ];
 const ITEM_COLORS = ["#2f6df0","#f0772f","#1f9d57","#9b59b6","#e74c3c","#16a085","#d98324","#95a5a6"];
 
 function loadData() {
+  // 一次性清除歷史測試資料（除了品項）
+  if (!localStorage.getItem("data_cleared_v2")) {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        d.records = {};
+        d.opening = {date:"", amount:0};
+        d.payments = [];
+        // 如果此帳號是 cmm，則清除其初始標記以重新在登入時執行初始化
+        delete d.initializedForCmm;
+        d.updatedAt = Date.now();
+        localStorage.setItem(STORE_KEY, JSON.stringify(d));
+      }
+    } catch(e) {}
+    localStorage.setItem("data_cleared_v2", "true");
+  }
+
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
@@ -414,6 +432,12 @@ function loadData() {
       if (!d.records)                 d.records  = {};
       if (!d.opening)                 d.opening  = {date:"",amount:0};
       if (!Array.isArray(d.payments)) d.payments = [];
+      // 自動升級舊有資料中的品項名稱
+      d.items.forEach(it => {
+        if (it.id === "i_hourly" && it.name === "時薪") {
+          it.name = "時薪(小時)";
+        }
+      });
       return d;
     }
   } catch(e) {}
@@ -476,7 +500,7 @@ async function syncFromCloud() {
   updateSyncStatus("syncing");
   try {
     const {data:row,error}=await supaClient.from("piecework_data")
-      .select("payload,updated_at").eq("key","main").maybeSingle();
+      .select("payload,updated_at").eq("key","main").eq("user_id",user.id).maybeSingle();
     if (error) throw error;
     if (!row) { await syncToCloud(); return; }
     const cloudTime=new Date(row.updated_at).getTime();
@@ -487,6 +511,12 @@ async function syncFromCloud() {
       if (!Array.isArray(d.payments)) d.payments=[];
       if (!Array.isArray(d.items))    d.items=DEFAULT_ITEMS.slice();
       if (!d.records)  d.records={};
+      // 自動升級雲端下載資料中的品項名稱
+      d.items.forEach(it => {
+        if (it.id === "i_hourly" && it.name === "時薪") {
+          it.name = "時薪(小時)";
+        }
+      });
       d.updatedAt = cloudTime;
       data=d; saveLocal(); renderAll();
       updateSyncStatus("ok");
@@ -581,7 +611,80 @@ supaClient && supaClient.auth.onAuthStateChange((event,session)=>{
   else if (session){
     showApp();
     if(event==="SIGNED_IN" || event==="INITIAL_SESSION"){
-      syncFromCloud();
+      syncFromCloud().then(() => {
+        const email = session.user.email;
+        if (email === "cmm530227@gmail.com" && !data.initializedForCmm) {
+          data.items = [
+            {id:"i_dumpling", name:"水餃(斤)", unit:"斤", price:30},
+            {id:"i_wonton",   name:"餛飩", unit:"份", price:35},
+            {id:"i_wonton_30",name:"餛飩($30)", unit:"份", price:30},
+            {id:"i_shrimp",   name:"蝦+干貝", unit:"斤", price:40},
+            {id:"i_hourly",   name:"時薪(小時)", unit:"小時", price:180},
+          ];
+          data.records = {
+            "2026-01-01": {"i_dumpling": 45},
+            "2026-01-02": {"i_dumpling": 50},
+            "2026-01-03": {"i_dumpling": 40},
+            "2026-01-06": {"i_dumpling": 55},
+            "2026-01-07": {"i_dumpling": 55},
+            "2026-01-08": {"i_dumpling": 50},
+            "2026-01-09": {"i_dumpling": 50},
+            "2026-01-10": {"i_dumpling": 40},
+            "2026-01-12": {"i_dumpling": 45},
+            "2026-01-13": {"i_dumpling": 55},
+            "2026-01-14": {"i_dumpling": 20, "i_shrimp": 25},
+            "2026-01-15": {"i_dumpling": 50},
+            "2026-01-16": {"i_dumpling": 52},
+            "2026-01-17": {"i_dumpling": 42},
+            "2026-01-19": {"i_dumpling": 45, "i_shrimp": 6},
+            "2026-01-20": {"i_dumpling": 50},
+            "2026-01-21": {"i_dumpling": 40, "i_shrimp": 10},
+            "2026-01-22": {"i_dumpling": 50},
+            "2026-01-23": {"i_dumpling": 47},
+            "2026-01-24": {"i_dumpling": 45},
+            "2026-01-26": {"i_dumpling": 35},
+            "2026-01-27": {"i_dumpling": 45, "i_wonton": 5},
+            "2026-01-28": {"i_dumpling": 52},
+            "2026-01-29": {"i_dumpling": 47, "i_shrimp": 3},
+            "2026-01-30": {"i_dumpling": 47},
+            "2026-02-01": {"i_dumpling": 30, "i_wonton": 10},
+            "2026-02-02": {"i_dumpling": 55},
+            "2026-02-03": {"i_dumpling": 35, "i_shrimp": 15},
+            "2026-02-04": {"i_dumpling": 65},
+            "2026-02-05": {"i_dumpling": 60},
+            "2026-02-06": {"i_dumpling": 40, "i_shrimp": 15},
+            "2026-02-07": {"i_dumpling": 20, "i_wonton": 20},
+            "2026-02-08": {"i_dumpling": 15, "i_wonton_30": 20},
+            "2026-02-09": {"i_dumpling": 55},
+            "2026-02-10": {"i_dumpling": 55},
+            "2026-02-11": {"i_dumpling": 54},
+            "2026-02-12": {"i_dumpling": 55},
+            "2026-02-13": {"i_dumpling": 45, "i_shrimp": 10},
+            "2026-02-14": {"i_dumpling": 55},
+            "2026-02-15": {"i_dumpling": 20, "i_wonton": 5},
+            "2026-02-22": {"i_dumpling": 15},
+            "2026-02-23": {"i_dumpling": 50},
+            "2026-02-24": {"i_dumpling": 45, "i_wonton_30": 4},
+            "2026-02-25": {"i_dumpling": 50, "i_shrimp": 5},
+            "2026-02-26": {"i_dumpling": 55},
+            "2026-02-27": {"i_dumpling": 55}
+          };
+          data.opening = {
+            date: "2025-12-31",
+            amount: 814852
+          };
+          data.payments = [
+            {id: "p_cmm_1", yearMonth: "2026-01", amount: 109500, note: "115/01付"},
+            {id: "p_cmm_2", yearMonth: "2026-02", amount: 50276, note: "115/02付"}
+          ];
+          data.initializedForCmm = true;
+          data.updatedAt = Date.now();
+          saveLocal();
+          syncToCloud().then(() => {
+            renderAll();
+          });
+        }
+      });
     }
   }
   else{showLogin();}
@@ -617,8 +720,20 @@ document.getElementById("tabStatsBtn").addEventListener("click", ()=>switchTab("
 // ── 記錄分頁 ──────────────────────────────────────────────────
 function setSaveBtnState(state) {
   const btn=document.getElementById("saveBtn");
-  if (state==="saved") { btn.textContent="更改"; btn.classList.add("saved"); }
-  else                 { btn.textContent="儲存這天"; btn.classList.remove("saved"); }
+  const dateInput=document.getElementById("dateInput");
+  const qtyInputs=document.querySelectorAll("#entryItems input.qty");
+  if (state==="saved") {
+    btn.textContent="更改";
+    btn.classList.add("saved");
+    if (dateInput) dateInput.disabled = true;
+    qtyInputs.forEach(inp => inp.disabled = true);
+  }
+  else {
+    btn.textContent="儲存這天";
+    btn.classList.remove("saved");
+    if (dateInput) dateInput.disabled = false;
+    qtyInputs.forEach(inp => inp.disabled = false);
+  }
 }
 
 function renderMonthHeader() {
@@ -977,53 +1092,67 @@ document.getElementById("savePayment").addEventListener("click",()=>{
 });
 
 // ── 統計分頁 ──────────────────────────────────────────────────
-function calcYearStats(year) {
-  const monthTotals=Array(12).fill(0),itemTotals={};
+function calcMonthStats(dateObj) {
+  const y=dateObj.getFullYear(), m0=dateObj.getMonth(), dim=daysInMonth(y,m0);
+  const dayTotals=Array(dim).fill(0), itemTotals={};
   data.items.forEach(it=>itemTotals[it.id]=0);
-  let grand=0,days=0;
-  Object.keys(data.records).forEach(key=>{
-    if (!key.startsWith(String(year)+"-")) return;
-    const m0=parseInt(key.slice(5,7),10)-1,rec=data.records[key];let dayMoney=0;
-    data.items.forEach(it=>{const q=rec[it.id]||0;itemTotals[it.id]+=q*it.price;dayMoney+=q*it.price;});
-    if (dayMoney>0){days++;grand+=dayMoney;monthTotals[m0]+=dayMoney;}
-  });
-  return {monthTotals,itemTotals,grand,days};
+  let grand=0, days=0;
+  for (let d=1; d<=dim; d++) {
+    const key=`${y}-${pad(m0+1)}-${pad(d)}`, rec=data.records[key];
+    if (!rec) continue;
+    let dayMoney=0;
+    data.items.forEach(it=>{
+      const q=rec[it.id]||0;
+      itemTotals[it.id]+=q*it.price;
+      dayMoney+=q*it.price;
+    });
+    if (dayMoney>0) {
+      days++;
+      grand+=dayMoney;
+      dayTotals[d-1]=dayMoney;
+    }
+  }
+  return {dayTotals, itemTotals, grand, days};
 }
 function renderStats() {
-  const y=statYear;
-  document.getElementById("statYearRoc").textContent=`${rocYear(y)}年`;
-  document.getElementById("statYearIso").textContent=`西元 ${y} 年`;
-  const {monthTotals,itemTotals,grand,days}=calcYearStats(y);
+  const y=statMonthDate.getFullYear(), m=statMonthDate.getMonth()+1;
+  document.getElementById("statYearRoc").textContent=`${rocYear(y)}年 ${m}月`;
+  document.getElementById("statYearIso").textContent=`西元 ${y} 年 ${m} 月`;
+  const {dayTotals,itemTotals,grand,days}=calcMonthStats(statMonthDate);
   document.getElementById("statTotal").textContent=money(grand);
   document.getElementById("statDays").textContent=days;
   document.getElementById("statAvg").textContent=money(days?Math.round(grand/days):0);
-  renderBarChart(monthTotals,y);
+  renderBarChart(dayTotals,statMonthDate);
   renderItemBreakdown(itemTotals,grand);
   renderStatMonthTable();
 }
-function renderBarChart(monthTotals,year) {
-  const MONTHS=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
-  const W=44,GAP=6,PL=8,PR=8,PT=10,PB=36,BH=140;
-  const maxVal=Math.max(...monthTotals,1),curM=(year===new Date().getFullYear())?new Date().getMonth():-1;
-  const TW=PL+12*(W+GAP)-GAP+PR,TH=PT+BH+PB;
+function renderBarChart(dayTotals, dateObj) {
+  const W=32, GAP=5, PL=8, PR=8, PT=15, PB=30, BH=140;
+  const maxVal=Math.max(...dayTotals, 1);
+  const today=new Date();
+  const isCurrentMonth = (dateObj.getFullYear()===today.getFullYear() && dateObj.getMonth()===today.getMonth());
+  const curD = isCurrentMonth ? today.getDate() : -1;
+  
+  const TW=PL+dayTotals.length*(W+GAP)-GAP+PR, TH=PT+BH+PB;
   let svg=`<svg class="barchart" width="${TW}" height="${TH}" xmlns="http://www.w3.org/2000/svg">`;
-  monthTotals.forEach((val,i)=>{
-    const x=PL+i*(W+GAP),bH=val?Math.max(Math.round((val/maxVal)*BH),4):0,bY=PT+BH-bH;
-    const color=(i===curM)?"#2f6df0":"#93b4f8";
-    svg+=`<rect x="${x}" y="${PT}" width="${W}" height="${BH}" rx="6" class="bar-zero"/>`;
+  dayTotals.forEach((val,i)=>{
+    const dayNum = i+1;
+    const x=PL+i*(W+GAP), bH=val?Math.max(Math.round((val/maxVal)*BH),4):0, bY=PT+BH-bH;
+    const color=(dayNum===curD)?"#2f6df0":"#93b4f8";
+    svg+=`<rect x="${x}" y="${PT}" width="${W}" height="${BH}" rx="4" class="bar-zero"/>`;
     if (val){
-      svg+=`<rect x="${x}" y="${bY}" width="${W}" height="${bH}" rx="6" fill="${color}"/>`;
-      const s=val>=10000?(val/10000).toFixed(1)+"萬":(val/1000).toFixed(0)+"k";
-      svg+=`<text x="${x+W/2}" y="${bY-3}" text-anchor="middle" class="bar-value">${s}</text>`;
+      svg+=`<rect x="${x}" y="${bY}" width="${W}" height="${bH}" rx="4" fill="${color}"/>`;
+      const s=val>=1000?(val/1000).toFixed(1)+"k":Math.round(val);
+      svg+=`<text x="${x+W/2}" y="${bY-3}" text-anchor="middle" class="bar-value" style="font-size:9px">${s}</text>`;
     }
-    svg+=`<text x="${x+W/2}" y="${PT+BH+16}" text-anchor="middle" class="bar-label">${MONTHS[i]}</text>`;
+    svg+=`<text x="${x+W/2}" y="${PT+BH+14}" text-anchor="middle" class="bar-label">${dayNum}</text>`;
   });
   svg+=`</svg>`;
   document.getElementById("barChartWrap").innerHTML=svg;
 }
 function renderItemBreakdown(itemTotals,grand) {
   const box=document.getElementById("itemBreakdown");
-  if (!grand){box.innerHTML=`<div class="empty">這一年還沒有紀錄</div>`;return;}
+  if (!grand){box.innerHTML=`<div class="empty">這個月還沒有紀錄</div>`;return;}
   let html="";
   data.items.forEach((it,i)=>{
     const amt=itemTotals[it.id]||0;if (!amt) return;
@@ -1082,10 +1211,10 @@ function renderStatMonthTable() {
   </div>`;
   totBox.innerHTML=`<div class="totalbox" style="margin-top:8px">${th}</div>`;
 }
-function changeStatMonth(d){statMonthDate.setMonth(statMonthDate.getMonth()+d);renderStatMonthTable();}
+function changeStatMonth(d){statMonthDate.setMonth(statMonthDate.getMonth()+d);renderStats();}
 document.getElementById("statPrevMonth").addEventListener("click",()=>changeStatMonth(-1));
 document.getElementById("statNextMonth").addEventListener("click",()=>changeStatMonth(1));
-function changeYear(d){statYear+=d;renderStats();}
+function changeYear(d){statMonthDate.setMonth(statMonthDate.getMonth()+d);renderStats();}
 document.getElementById("prevYear").addEventListener("click",()=>changeYear(-1));
 document.getElementById("nextYear").addEventListener("click",()=>changeYear(1));
 
@@ -1122,7 +1251,7 @@ document.getElementById("exportCombinedBtn").addEventListener("click", async () 
   const debtSec = document.getElementById("combinedDebtSection");
   
   const y = viewDate.getFullYear(), m = viewDate.getMonth() + 1;
-  document.getElementById("combinedTitle").textContent = `小滿賺大錢 - ${rocYear(y)}年${m}月 綜合報表`;
+  document.getElementById("combinedTitle").textContent = `${rocYear(y)}年${m}月 綜合報表`;
   
   // 複製本月明細內容
   monthSec.innerHTML = `
@@ -1158,7 +1287,7 @@ document.getElementById("exportCombinedBtn").addEventListener("click", async () 
     });
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
-    a.download = `小滿賺大錢_${rocYear(y)}年${m}月_合併報表.png`;
+    a.download = `${rocYear(y)}年${m}月_綜合報表.png`;
     a.click();
   } catch(e) {
     alert("合併匯出失敗：" + e.message);
