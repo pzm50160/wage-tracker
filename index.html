@@ -735,16 +735,15 @@ function setSaveBtnState(state) {
   const btn=document.getElementById("saveBtn");
   const dateInput=document.getElementById("dateInput");
   const qtyInputs=document.querySelectorAll("#entryItems input.qty");
+  if (dateInput) dateInput.disabled = false; // 永遠不鎖定日期，讓使用者可以自由點選與切換日期
   if (state==="saved") {
     btn.textContent="更改";
     btn.classList.add("saved");
-    if (dateInput) dateInput.disabled = true;
     qtyInputs.forEach(inp => inp.disabled = true);
   }
   else {
     btn.textContent="儲存這天";
     btn.classList.remove("saved");
-    if (dateInput) dateInput.disabled = false;
     qtyInputs.forEach(inp => inp.disabled = false);
   }
 }
