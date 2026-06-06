@@ -1031,10 +1031,20 @@ function buildLedgerRows() {
   const rows=[];
 
   const LIMIT = 6;
-  let oldYMs = [], newYMs = allYMs;
-  if (allYMs.length > LIMIT) {
-    oldYMs = allYMs.slice(0, allYMs.length - LIMIT);
-    newYMs = allYMs.slice(allYMs.length - LIMIT);
+  let oldYMs = [], newYMs = [];
+  if (allYMs.length > 0) {
+    const lastYM = allYMs[allYMs.length - 1];
+    const [lastY, lastM] = lastYM.split("-").map(Number);
+    const lastVal = lastY * 12 + lastM;
+    allYMs.forEach(ym => {
+      const [y, m] = ym.split("-").map(Number);
+      const val = y * 12 + m;
+      if (lastVal - val < LIMIT) {
+        newYMs.push(ym);
+      } else {
+        oldYMs.push(ym);
+      }
+    });
   }
 
   // 先計算 oldYMs (前期) 的餘額累加
