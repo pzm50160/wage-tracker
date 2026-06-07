@@ -1280,21 +1280,25 @@ document.getElementById("importBackupFile").addEventListener("change", (e) => {
 });
 
 // ── 圖片預覽（手機可長按存相簿，或按下載） ─────────────────────
+function dataUrlToBlob(dataUrl) {
+  const [head, b64] = dataUrl.split(",");
+  const mime = (head.match(/:(.*?);/) || [, "image/png"])[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type: mime});
+}
 function showImagePreview(canvas, filename) {
   const dataUrl = canvas.toDataURL("image/png");
   document.getElementById("imgPreviewImg").src = dataUrl;   // 長按此圖可存相簿
   const dl = document.getElementById("imgPreviewDownload");
   dl.download = filename + ".png";
   // 用 Blob URL 當下載連結：iPhone Safari 對 blob: 才會真的下載到「檔案」，
-  // data: 則會被當成導覽、跳到預覽頁而不下載。
+  // data: 則會被當成導覽、跳到預覽頁而不下載。同步轉檔，href 一開始就是 blob:。
   if (dl.dataset.blobUrl) { URL.revokeObjectURL(dl.dataset.blobUrl); dl.dataset.blobUrl = ""; }
-  dl.href = dataUrl;   // toBlob 完成前的後備
-  canvas.toBlob((blob) => {
-    if (!blob) return;
-    const blobUrl = URL.createObjectURL(blob);
-    dl.href = blobUrl;
-    dl.dataset.blobUrl = blobUrl;
-  }, "image/png");
+  const blobUrl = URL.createObjectURL(dataUrlToBlob(dataUrl));
+  dl.href = blobUrl;
+  dl.dataset.blobUrl = blobUrl;
   document.getElementById("imgPreviewOverlay").style.display = "block";
 }
 document.getElementById("imgPreviewClose").addEventListener("click", () => {
