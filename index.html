@@ -34,7 +34,7 @@
   .login-ok{font-size:13px;min-height:20px;margin:8px 0;color:var(--good);}
 
   /* 主程式 */
-  #appScreen{padding-bottom:90px;}
+  #appScreen{padding-bottom:24px;}
   .sync-line{font-size:12px;text-align:center;margin:0 0 10px;min-height:16px;color:var(--muted);}
   .tabs{display:flex;background:var(--line);border-radius:12px;padding:3px;margin-bottom:12px;}
   .tabs button{flex:1;border:none;background:transparent;border-radius:9px;padding:9px 0;font-size:15px;font-weight:600;color:var(--muted);cursor:pointer;}
@@ -60,6 +60,9 @@
     width:100%;padding:11px 12px;font-size:16px;
     border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);}
   input:focus{outline:none;border-color:var(--brand);}
+  /* iOS 日期欄位：靠左、不溢出格線 */
+  input[type="date"]{-webkit-appearance:none;appearance:none;text-align:left;display:block;min-width:0;max-width:100%;}
+  input[type="date"]::-webkit-date-and-time-value{text-align:left;margin:0;}
 
   .itemrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);}
   .itemrow:last-child{border-bottom:none;}
@@ -117,6 +120,12 @@
   .drag-handle{color:var(--muted);font-size:20px;cursor:grab;padding:0 2px;touch-action:none;flex-shrink:0;user-select:none;}
   .drag-handle:active{cursor:grabbing;}
   .itemrow.is-dragging{opacity:0.3; background: #eef4ff;}
+  /* 品項編輯對話框列表 */
+  #itemManagerList .setrow{display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);margin:0;}
+  #itemManagerList .setrow:last-child{border-bottom:none;}
+  #itemManagerList .setrow.is-dragging{opacity:0.3;background:#fbf3ec;}
+  #itemManagerList .mi-info{flex:1;min-width:0;cursor:pointer;}
+  #itemManagerList .del{flex-shrink:0;width:32px;height:32px;border:1px solid #f0c9c4;background:#fff;color:var(--red);border-radius:8px;cursor:pointer;font-size:14px;}
 
   .footbar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 12px;z-index:999;}
   .footbar .inner{max-width:720px;margin:0 auto;display:flex;gap:8px;}
@@ -253,9 +262,8 @@
       <div class="card">
         <div class="card-head">
           <h2>登記紀錄</h2>
-          <button class="btn ghost sm" id="addItemBtn">＋ 新增品項</button>
+          <button class="btn ghost sm" id="manageItemsBtn">編輯品項</button>
         </div>
-        <p class="hint" style="margin-top:-6px;margin-bottom:10px">點擊品項名稱旁 ✏️ 可單項編輯；拖曳 ⠿ 調整順序。</p>
         <label class="fld" for="dateInput">日期</label>
         <input type="date" id="dateInput">
         <div id="entryItems" style="margin-top:10px;"></div>
@@ -330,14 +338,11 @@
           <div id="statMonthTotals"></div>
         </div>
       </div>
+      <button class="btn ghost sm" id="exportBackupBtn" style="width:100%;margin-top:4px">匯出備份（JSON）</button>
+      <button class="btn ghost sm" id="logoutBtn" style="color:var(--red);border-color:#f0c9c4;width:100%;margin-top:8px">登出</button>
     </div>
   </div>
 
-  <div class="footbar">
-    <div class="inner">
-      <button class="btn ghost sm" id="logoutBtn" style="color:var(--red);border-color:#f0c9c4;width:100%">登出</button>
-    </div>
-  </div>
 </div>
 
 <!-- 合併匯出臨時容器 -->
@@ -346,6 +351,26 @@
   <div id="combinedMonthSection"></div>
   <div id="combinedDebtSection" style="margin-top: 20px;"></div>
 </div>
+
+<!-- 圖片預覽（匯出用，可長按存相簿） -->
+<div id="imgPreviewOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);overflow:auto;padding:20px 16px;text-align:center">
+  <p style="color:#fff;font-size:14px;margin:6px 0 12px">長按圖片可儲存到相簿，或按下方「下載圖片」</p>
+  <img id="imgPreviewImg" alt="" style="max-width:100%;border-radius:10px;background:#fff">
+  <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
+    <a id="imgPreviewDownload" download class="btn primary" style="width:auto;text-decoration:none">下載圖片</a>
+    <button id="imgPreviewClose" class="btn ghost" style="width:auto">關閉</button>
+  </div>
+</div>
+
+<dialog id="itemManagerDlg">
+  <div class="dlg-in">
+    <h2>編輯品項</h2>
+    <p class="hint">拖曳 ⠿ 排序；點品項可改名稱與單價；✕ 刪除。</p>
+    <div id="itemManagerList"></div>
+    <button class="btn ghost sm" id="managerAddBtn" style="width:100%;margin-top:10px">＋ 新增品項</button>
+    <button class="btn primary" id="closeManagerBtn" style="margin-top:12px">完成</button>
+  </div>
+</dialog>
 
 <dialog id="itemEditDlg">
   <div class="dlg-in">
@@ -684,31 +709,15 @@ function renderEntryForm() {
   data.items.forEach(it=>{
     const qty=rec[it.id]!=null?rec[it.id]:"";
     const row=document.createElement("div"); row.className="itemrow";
-    row.dataset.id = it.id;
     row.innerHTML=`
-      <span class="drag-handle" style="margin-right:8px;font-size:20px;color:var(--muted);cursor:grab;user-select:none;touch-action:none">⠿</span>
-      <div class="nm-edit-btn" style="flex:1;display:flex;align-items:center;gap:4px;cursor:pointer" data-id="${it.id}">
-        <span class="nm" style="font-weight:600">${escapeHtml(it.name)}</span>
-        <small style="color:var(--muted);font-size:12px">${money(it.price)}/${escapeHtml(it.unit)}</small>
-        <span style="font-size:11px;color:var(--brand)">✏️</span>
+      <div class="nm" style="flex:1">
+        <span style="font-weight:600">${escapeHtml(it.name)}</span>
+        <small style="display:block;color:var(--muted);font-size:12px">${money(it.price)}/${escapeHtml(it.unit)}</small>
       </div>
       <input class="qty" type="number" inputmode="decimal" step="any" min="0"
              data-item="${it.id}" placeholder="0" value="${qty}" style="width:90px;margin-left:8px">
       <div class="amt" data-amt="${it.id}" style="width:80px;text-align:right;color:var(--good);font-variant-numeric:tabular-nums;font-weight:600">${money(num(qty)*it.price)}</div>`;
     box.appendChild(row);
-  });
-  box.querySelectorAll(".nm-edit-btn").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const it=data.items.find(x=>x.id===btn.dataset.id);
-      if(!it) return;
-      document.getElementById("itemEditTitle").textContent="編輯品項";
-      document.getElementById("editItemId").value=it.id;
-      document.getElementById("editItemName").value=it.name;
-      document.getElementById("editItemUnit").value=it.unit;
-      document.getElementById("editItemPrice").value=it.price;
-      document.getElementById("deleteItemBtn").style.display="";
-      document.getElementById("itemEditDlg").showModal();
-    });
   });
   box.querySelectorAll("input.qty").forEach(inp=>{
     inp.addEventListener("input",()=>{
@@ -717,10 +726,8 @@ function renderEntryForm() {
       setSaveBtnState("unsaved");
     });
   });
-  // 根據是否已有紀錄決定按鈕初始狀態
   const hasRec=date&&data.records[date]&&Object.keys(data.records[date]).length>0;
   setSaveBtnState(hasRec?"saved":"unsaved");
-  enableDragSort();
 }
 function saveEntry() {
   const date=document.getElementById("dateInput").value;
@@ -811,40 +818,82 @@ document.getElementById("saveBtn").addEventListener("click",()=>{
   }
 });
 
-// ── 登記紀錄拖曳排序 ───────────────────────────
-function enableDragSort() {
-  const list=document.getElementById("entryItems");
-  let dragEl=null, ghostEl=null, offsetY=0;
+// ── 品項編輯對話框（列表 + 拖曳排序） ───────────────────────────
+function renderItemManager() {
+  const list=document.getElementById("itemManagerList");
+  list.innerHTML="";
+  data.items.forEach(it=>{
+    const row=document.createElement("div");
+    row.className="setrow"; row.dataset.id=it.id;
+    row.innerHTML=`
+      <span class="drag-handle">⠿</span>
+      <div class="mi-info" data-id="${it.id}" style="flex:1;min-width:0;cursor:pointer">
+        <span style="font-weight:600">${escapeHtml(it.name)}</span>
+        <small style="color:var(--muted);font-size:12px;margin-left:4px">${money(it.price)}/${escapeHtml(it.unit)}</small>
+      </div>
+      <button class="del" data-id="${it.id}" title="刪除">✕</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll(".mi-info").forEach(el=>{
+    el.addEventListener("click",()=>openItemEdit(el.dataset.id));
+  });
+  list.querySelectorAll(".del").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const id=btn.dataset.id;
+      if (!confirm("確定刪除此品項？歷史明細不會刪除，但無法再登記新數量。")) return;
+      data.items=data.items.filter(x=>x.id!==id);
+      data.updatedAt=Date.now(); saveLocal(); syncToCloud();
+      renderItemManager(); renderEntryForm(); renderMonthTable();
+    });
+  });
+}
 
-  function getRows(){return [...list.querySelectorAll(".itemrow")];}
+function openItemEdit(id) {
+  const it=id?data.items.find(x=>x.id===id):null;
+  document.getElementById("itemEditTitle").textContent=it?"編輯品項":"新增品項";
+  document.getElementById("editItemId").value=it?it.id:"";
+  document.getElementById("editItemName").value=it?it.name:"";
+  document.getElementById("editItemUnit").value=it?it.unit:"";
+  document.getElementById("editItemPrice").value=it?it.price:"";
+  document.getElementById("deleteItemBtn").style.display="none";
+  document.getElementById("itemEditDlg").showModal();
+}
+
+document.getElementById("manageItemsBtn").addEventListener("click",()=>{
+  renderItemManager();
+  document.getElementById("itemManagerDlg").showModal();
+});
+document.getElementById("closeManagerBtn").addEventListener("click",()=>{
+  document.getElementById("itemManagerDlg").close();
+});
+document.getElementById("managerAddBtn").addEventListener("click",()=>openItemEdit(null));
+
+// 品項編輯列表的拖曳排序（只綁一次）
+(function enableManagerDrag(){
+  const list=document.getElementById("itemManagerList");
+  let dragEl=null, ghostEl=null, offsetY=0;
   function nearestRow(y){
-    for (const r of getRows()){
+    for (const r of list.querySelectorAll(".setrow")){
       if (r===dragEl) continue;
       const rect=r.getBoundingClientRect();
       if (y<rect.bottom) return {el:r,before:y<rect.top+rect.height/2};
     }
     return null;
   }
-
   list.addEventListener("pointerdown",e=>{
     if (!e.target.closest(".drag-handle")) return;
     e.preventDefault();
-    dragEl=e.target.closest(".itemrow");
+    dragEl=e.target.closest(".setrow");
     const rect=dragEl.getBoundingClientRect();
     offsetY=e.clientY-rect.top;
     ghostEl=dragEl.cloneNode(true);
-    ghostEl.querySelector("input").value = dragEl.querySelector("input").value;
-    Object.assign(ghostEl.style,{
-      position:"fixed",left:rect.left+"px",width:rect.width+"px",
-      top:rect.top+"px",zIndex:9999,opacity:"0.85",pointerEvents:"none",
-      background:"#fff",borderRadius:"10px",boxShadow:"0 4px 20px rgba(0,0,0,.2)",
-      border:"1px solid #e3e6ea",margin:0,display:"flex",alignItems:"center"
-    });
+    Object.assign(ghostEl.style,{position:"fixed",left:rect.left+"px",width:rect.width+"px",
+      top:rect.top+"px",zIndex:9999,opacity:"0.9",pointerEvents:"none",background:"#fff",
+      borderRadius:"10px",boxShadow:"0 4px 20px rgba(0,0,0,.2)",margin:0,display:"flex",alignItems:"center"});
     document.body.appendChild(ghostEl);
     dragEl.classList.add("is-dragging");
     list.setPointerCapture(e.pointerId);
   },{passive:false});
-
   list.addEventListener("pointermove",e=>{
     if (!dragEl) return;
     ghostEl.style.top=(e.clientY-offsetY)+"px";
@@ -854,39 +903,23 @@ function enableDragSort() {
       else            list.insertBefore(dragEl,pos.el.nextSibling);
     }
   });
-
   function endDrag(){
     if (!dragEl) return;
     dragEl.classList.remove("is-dragging");
-    ghostEl?.remove(); ghostEl=null; dragEl=null;
-    
-    const rows = list.querySelectorAll(".itemrow");
-    const newItems = [];
-    rows.forEach(row => {
-      const id = row.dataset.id;
-      const it = data.items.find(x => x.id === id);
+    if (ghostEl) ghostEl.remove(); ghostEl=null;
+    const newItems=[];
+    list.querySelectorAll(".setrow").forEach(row=>{
+      const it=data.items.find(x=>x.id===row.dataset.id);
       if (it) newItems.push(it);
     });
-    data.items = newItems;
-    data.updatedAt = Date.now();
-    saveLocal();
-    syncToCloud();
-    renderMonthTable();
+    data.items=newItems; data.updatedAt=Date.now();
+    saveLocal(); syncToCloud(); renderEntryForm(); renderMonthTable();
+    dragEl=null;
   }
   list.addEventListener("pointerup",endDrag);
   list.addEventListener("pointercancel",endDrag);
-}
+})();
 
-// ── 品項單項編輯對話框 ───────────────────────────
-document.getElementById("addItemBtn").addEventListener("click", () => {
-  document.getElementById("itemEditTitle").textContent = "新增品項";
-  document.getElementById("editItemId").value = "";
-  document.getElementById("editItemName").value = "";
-  document.getElementById("editItemUnit").value = "";
-  document.getElementById("editItemPrice").value = "";
-  document.getElementById("deleteItemBtn").style.display = "none";
-  document.getElementById("itemEditDlg").showModal();
-});
 document.getElementById("cancelItemEdit").addEventListener("click", () => {
   document.getElementById("itemEditDlg").close();
 });
@@ -912,6 +945,7 @@ document.getElementById("saveItemEdit").addEventListener("click", () => {
   saveLocal();
   syncToCloud();
   document.getElementById("itemEditDlg").close();
+  renderItemManager();
   renderAll();
   flash("品項已更新");
 });
@@ -1019,14 +1053,17 @@ function renderDebt() {
     return;
   }
   let html=`<table class="ldg">
-    <thead><tr><th>日期</th><th>說明</th><th>工資</th><th>付款</th><th>結餘</th><th></th></tr></thead><tbody>`;
+    <thead><tr><th>日期</th><th>說明</th><th>工資/-付款</th><th>結餘</th><th></th></tr></thead><tbody>`;
   rows.forEach(row=>{
-    const wCell=row.wages!=null?`<td class="wage">+${money(row.wages)}</td>`:`<td class="dim">—</td>`;
-    const pCell=row.payment!=null?`<td class="pay">-${money(row.payment)}</td>`:`<td class="dim">—</td>`;
+    const amtCell=row.wages!=null
+      ? `<td class="wage">+${money(row.wages)}</td>`
+      : row.payment!=null
+        ? `<td class="pay">-${money(row.payment)}</td>`
+        : `<td class="dim">—</td>`;
     const del=row.type==="payment"?`<button class="ldg-delbtn" data-pid="${row.paymentId}">✕</button>`:``;
-    html+=`<tr class="lr-${row.type}"><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.desc)}</td>${wCell}${pCell}<td class="bal">${money(row.balance)}</td><td>${del}</td></tr>`;
+    html+=`<tr class="lr-${row.type}"><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.desc)}</td>${amtCell}<td class="bal">${money(row.balance)}</td><td>${del}</td></tr>`;
   });
-  html+=`</tbody><tfoot><tr><td colspan="4" style="text-align:left">目前結餘</td><td class="pay" style="font-size:15px">${money(rows[rows.length-1].balance)}</td><td></td></tr></tfoot></table>`;
+  html+=`</tbody><tfoot><tr><td colspan="3" style="text-align:left">目前結餘</td><td class="pay" style="font-size:15px">${money(rows[rows.length-1].balance)}</td><td></td></tr></tfoot></table>`;
   box.innerHTML=html;
   box.querySelectorAll(".ldg-delbtn").forEach(btn=>{
     btn.addEventListener("click",()=>{
@@ -1198,6 +1235,29 @@ function changeYear(d){statMonthDate.setMonth(statMonthDate.getMonth()+d);render
 document.getElementById("prevYear").addEventListener("click",()=>changeYear(-1));
 document.getElementById("nextYear").addEventListener("click",()=>changeYear(1));
 
+// ── 匯出備份（完整 JSON，存到手機「檔案」App） ─────────────────
+document.getElementById("exportBackupBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `小滿賺大錢備份_${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// ── 圖片預覽（手機可長按存相簿，或按下載） ─────────────────────
+function showImagePreview(canvas, filename) {
+  const url = canvas.toDataURL("image/png");
+  document.getElementById("imgPreviewImg").src = url;
+  const dl = document.getElementById("imgPreviewDownload");
+  dl.href = url; dl.download = filename + ".png";
+  document.getElementById("imgPreviewOverlay").style.display = "block";
+}
+document.getElementById("imgPreviewClose").addEventListener("click", () => {
+  document.getElementById("imgPreviewOverlay").style.display = "none";
+  document.getElementById("imgPreviewImg").src = "";
+});
+
 // ── 匯出圖片 ─────────────────────────────────────────────────
 async function exportAsImage(elementId, filename) {
   const el = document.getElementById(elementId);
@@ -1206,10 +1266,7 @@ async function exportAsImage(elementId, filename) {
       scale: 2, backgroundColor: "#f4f5f7",
       useCORS: true, allowTaint: true
     });
-    const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/png");
-    a.download = filename + ".png";
-    a.click();
+    showImagePreview(canvas, filename);
   } catch(e) { alert("匯出失敗：" + e.message); }
 }
 
@@ -1265,10 +1322,7 @@ document.getElementById("exportCombinedBtn").addEventListener("click", async () 
       useCORS: true,
       allowTaint: true
     });
-    const a = document.createElement("a");
-    a.href = canvas.toDataURL("image/png");
-    a.download = `阿滿-${rocYear(y)}年${m}月工資.png`;
-    a.click();
+    showImagePreview(canvas, `阿滿-${rocYear(y)}年${m}月工資`);
   } catch(e) {
     alert("合併匯出失敗：" + e.message);
   } finally {
@@ -1277,11 +1331,13 @@ document.getElementById("exportCombinedBtn").addEventListener("click", async () 
   }
 });
 
-// ── 切回頁面自動更新日期 ───────────────────────────────────────
+// ── 切回頁面：更新日期 + 重新拉取雲端最新資料 ───────────────────
 document.addEventListener("visibilitychange",()=>{
   if (document.visibilityState==="visible"){
     const inp=document.getElementById("dateInput");
     if (inp&&inp.value!==todayStr()){inp.value=todayStr();renderEntryForm();}
+    // 切回前景時拉一次雲端,讓多台裝置看到彼此最新的資料(事件觸發,非輪詢)
+    if (currentUser) syncFromCloud();
   }
 });
 </script>
