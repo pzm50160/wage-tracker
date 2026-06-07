@@ -356,7 +356,7 @@
 
 <!-- 圖片預覽（匯出用，可長按存相簿） -->
 <div id="imgPreviewOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);overflow:auto;padding:20px 16px;text-align:center">
-  <p style="color:#fff;font-size:14px;margin:6px 0 12px">長按圖片，或按下方「下載圖片」皆可儲存到相簿</p>
+  <p style="color:#fff;font-size:14px;margin:6px 0 12px">長按圖片可儲存到相簿，或按下方「下載圖片」</p>
   <img id="imgPreviewImg" alt="" style="max-width:100%;border-radius:10px;background:#fff">
   <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
     <a id="imgPreviewDownload" download class="btn primary" style="width:auto;text-decoration:none">下載圖片</a>
@@ -1279,39 +1279,17 @@ document.getElementById("importBackupFile").addEventListener("change", (e) => {
   e.target.value = "";   // 清空，讓同一檔可再次選取
 });
 
-// ── 圖片預覽（手機可長按存相簿，或按下載／分享存相簿） ──────────
-let previewShareFile = null;   // 供「下載圖片」鈕分享存相簿用
+// ── 圖片預覽（手機可長按存相簿，或按下載） ─────────────────────
 function showImagePreview(canvas, filename) {
   const url = canvas.toDataURL("image/png");
   document.getElementById("imgPreviewImg").src = url;
   const dl = document.getElementById("imgPreviewDownload");
   dl.href = url; dl.download = filename + ".png";
-  // 準備可分享的圖片檔（手機分享面板可直接「儲存影像」到相簿）
-  previewShareFile = null;
-  canvas.toBlob((blob) => {
-    if (blob) previewShareFile = new File([blob], filename + ".png", {type:"image/png"});
-  }, "image/png");
   document.getElementById("imgPreviewOverlay").style.display = "block";
 }
-document.getElementById("imgPreviewDownload").addEventListener("click", async (e) => {
-  // 支援檔案分享時，叫出系統分享面板（內含「儲存影像」可存到相簿）；否則維持原本下載
-  if (previewShareFile && navigator.canShare && navigator.canShare({files:[previewShareFile]})) {
-    e.preventDefault();
-    try {
-      await navigator.share({files:[previewShareFile]});
-    } catch(err) {
-      if (err && err.name === "AbortError") return;   // 使用者自己取消，不算失敗
-      // 分享失敗則退回原本下載行為
-      const dl = document.getElementById("imgPreviewDownload");
-      const a = document.createElement("a");
-      a.href = dl.href; a.download = dl.download; a.click();
-    }
-  }
-});
 document.getElementById("imgPreviewClose").addEventListener("click", () => {
   document.getElementById("imgPreviewOverlay").style.display = "none";
   document.getElementById("imgPreviewImg").src = "";
-  previewShareFile = null;
 });
 
 // ── 匯出圖片 ─────────────────────────────────────────────────
